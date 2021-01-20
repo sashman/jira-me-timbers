@@ -1,0 +1,1 @@
+{{ range .issues }}{{ .key }}{{ print "_" }}{{ end }}{{ range .issues }}{{ .fields.summary | lower  | replace ":" "" | replace ">" "" | replace "-" "" | replace "  " " " | snakecase }}{{ end }}

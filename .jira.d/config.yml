@@ -1,0 +1,67 @@
+endpoint: <JIRA_ENDPOINT>
+user: <JIRA_USERNAME>
+password-source: keyring
+
+custom-commands:
+  - name: mine
+    help: display incomplete issues assigned to me
+    script: |-
+      if [ -n "$JIRA_PROJECT" ]; then
+          # if `project: ...` configured just list the issues for current project
+          {{jira}} list --query "resolution = unresolved and assignee=currentuser() and project = $JIRA_PROJECT and status != 'Done' ORDER BY priority asc, created"
+      else
+          # otherwise list issues for all project
+          {{jira}} list --query "resolution = unresolved and assignee=currentuser() and status != 'Done' ORDER BY priority asc, created"
+      fi
+  - name: mine-done
+    help: display Done issues assigned to me
+    script: |-
+      if [ -n "$JIRA_PROJECT" ]; then
+          # if `project: ...` configured just list the issues for current project
+          {{jira}} list --query "resolution = unresolved and assignee=currentuser() and project = $JIRA_PROJECT and status = 'Done'  ORDER BY priority asc, created"
+      else
+          # otherwise list issues for all project
+          {{jira}} list --query "resolution = unresolved and assignee=currentuser() and status = 'Done' ORDER BY priority asc, created"
+      fi
+  - name: mine-current
+    help: display active issues assigned to me
+    options:
+      - name: number_only
+        type: BOOL
+        short: n
+        default: false
+      - name: branch
+        type: BOOL
+        short: b
+        default: false
+    script: |-
+      if [ -n "$JIRA_PROJECT" ]; then
+          # if `project: ...` configured just list the issues for current project
+          {{jira}} list {{ if options.number_only }}-t number_only{{ else if options.branch }}-t branch_name{{ end }} --query "resolution = unresolved and assignee=currentuser() and type != Epic and project = $JIRA_PROJECT and status IN ('In progress', 'In review') ORDER BY priority asc, created"
+      else
+          # otherwise list issues for all project
+          {{jira}} list {{ if options.number_only }}-t number_only{{ else if options.branch }}-t branch_name{{ end }} --query "resolution = unresolved and assignee=currentuser() and type != Epic and status IN ('In progress', 'In review') ORDER BY priority asc, created"
+      fi
+  - name: stash
+    help: move current task(s) into to do state
+    script: |-
+      TICKETS=`jira mine-current -n`
+      echo "$TICKETS" > ~/.jira.d/stashed_tickets
+      while IFS= read -r ticket; do
+          if [[ -z $ticket ]]; then
+            continue
+          fi
+          echo "Setting $ticket to To Do"
+          jira todo $ticket
+      done <<< "$TICKETS"
+  - name: unstash
+    help: move stashed tasks into in progress
+    script: |-
+      touch ~/.jira.d/stashed_tickets
+      while IFS= read -r ticket; do
+          if [[ -z $ticket ]]; then
+            continue
+          fi
+          echo "Setting $ticket to In Progress"
+          jira in-progress $ticket
+      done < ~/.jira.d/stashed_tickets
